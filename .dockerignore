@@ -1,0 +1,8 @@
+node_modules
+dist
+.git
+.env
+.kamal
+*.log
+README.md
+src/**/*.test.ts

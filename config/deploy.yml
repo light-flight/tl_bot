@@ -1,0 +1,36 @@
+service: tl_bot
+image: light-flight/tl_bot
+
+servers:
+  web:
+    - 192.0.2.1 # замените на IP сервера
+
+proxy:
+  ssl: true
+  host: bot.example.com # замените на домен
+  app_port: 3000
+  healthcheck:
+    path: /up
+    interval: 3
+    timeout: 3
+
+registry:
+  server: ghcr.io
+  username: light-flight
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  secret:
+    - TELEGRAM_BOT_TOKEN
+    - LINEAR_API_KEY
+    - LINEAR_TEAM
+    - LINEAR_PROJECT
+    - ASSIGNEE_MAP
+    - TELEGRAM_WEBHOOK_SECRET
+  clear:
+    PORT: "3000"
+    WEBHOOK_URL: https://bot.example.com/telegram/webhook # тот же домен, что и proxy.host
+
+builder:
+  arch: amd64
