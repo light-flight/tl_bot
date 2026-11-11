@@ -25,12 +25,13 @@
 
 ## Kamal
 
-Один контейнер, без базы. В [`config/deploy.yml`](config/deploy.yml) замените `192.0.2.1`, `bot.example.com` и такой же хост в `WEBHOOK_URL`. DNS домена должен смотреть на сервер. Для ARM-сервера поменяйте `builder.arch` на `arm64`. `registry.username` — GitHub-пользователь с правом `write:packages` на `ghcr.io/light-flight/tl_bot`.
+Один контейнер, без базы. Нужен Kamal 2.8 или новее (`kamal version`): он сам поднимает локальный registry на `localhost:5555` и по SSH прокидывает его на сервер. Логин и пароль registry не нужны.
+
+IP сервера, `proxy.host` и `WEBHOOK_URL` лежат в `config/deploy.production.yml`. Этот файл в git не попадает. Скопируйте [`config/deploy.production.yml.example`](config/deploy.production.yml.example) и впишите свои адреса. DNS хоста должен смотреть на сервер. Для ARM-сервера поменяйте `builder.arch` на `arm64` в [`config/deploy.yml`](config/deploy.yml).
 
 Секреты лежат в `.kamal/secrets` (файл в git не попадает) и подхватываются как shell:
 
 ```bash
-KAMAL_REGISTRY_PASSWORD=github_pat_...
 TELEGRAM_BOT_TOKEN=123:abc
 LINEAR_API_KEY=lin_api_...
 LINEAR_TEAM=TL
@@ -42,5 +43,8 @@ TELEGRAM_WEBHOOK_SECRET=long-random-string
 `TELEGRAM_WEBHOOK_SECRET` — любая длинная случайная строка. Kamal передаёт её в контейнер, бот сам вызывает `setWebhook`.
 
 ```bash
-kamal setup
+kamal setup -d production
+kamal deploy -d production
 ```
+
+Без `-d production` Kamal не знает сервер.

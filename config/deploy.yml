@@ -1,13 +1,11 @@
 service: tl_bot
 image: light-flight/tl_bot
 
-servers:
-  web:
-    - 192.0.2.1 # замените на IP сервера
+# Сервер, proxy.host и WEBHOOK_URL — в config/deploy.production.yml (не в git).
+# kamal setup -d production
 
 proxy:
   ssl: true
-  host: bot.example.com # замените на домен
   app_port: 3000
   healthcheck:
     path: /up
@@ -15,10 +13,7 @@ proxy:
     timeout: 3
 
 registry:
-  server: ghcr.io
-  username: light-flight
-  password:
-    - KAMAL_REGISTRY_PASSWORD
+  server: localhost:5555
 
 env:
   secret:
@@ -30,7 +25,6 @@ env:
     - TELEGRAM_WEBHOOK_SECRET
   clear:
     PORT: "3000"
-    WEBHOOK_URL: https://bot.example.com/telegram/webhook # тот же домен, что и proxy.host
 
 builder:
   arch: amd64

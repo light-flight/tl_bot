@@ -1,0 +1,10 @@
+servers:
+  web:
+    - 203.0.113.5
+
+proxy:
+  host: bot.example.com
+
+env:
+  clear:
+    WEBHOOK_URL: https://bot.example.com/telegram/webhook
