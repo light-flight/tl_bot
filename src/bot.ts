@@ -1,5 +1,5 @@
 import { Bot, type Context } from "grammy"
-import { buildDescription, formatSuccessReply, telegramMessageLink } from "./description.js"
+import { buildDescription, formatSuccessReply, messageLinkTitle, telegramMessageLink } from "./description.js"
 import type { LinearGateway } from "./linear.js"
 import { parseMessage, type TextEntity } from "./parse-message.js"
 
@@ -83,11 +83,9 @@ async function handleMention(ctx: Context, linear: LinearGateway, seen: Seen): P
         body: parsed.body,
         replyText,
         titleSource: parsed.titleSource,
-        author: authorLabel(message.from),
-        chatTitle: chat.title?.trim() || "чат",
-        messageLink: telegramMessageLink(chat.id, "username" in chat ? chat.username : undefined, message.message_id),
-        extraMentions: resolution.extraMentions,
       }),
+      messageLink: telegramMessageLink(chat.id, "username" in chat ? chat.username : undefined, message.message_id),
+      linkTitle: messageLinkTitle(message.from),
       ...(resolution.assignee ? { assigneeId: resolution.assignee.id } : {}),
     })
     created = true
@@ -100,12 +98,6 @@ async function handleMention(ctx: Context, linear: LinearGateway, seen: Seen): P
       await ctx.reply("Не смог создать задачу в Linear. Попробуйте ещё раз.")
     }
   }
-}
-
-function authorLabel(from: { username?: string; first_name: string } | undefined): string {
-  if (!from) return "неизвестен"
-  if (from.username) return `@${from.username}`
-  return from.first_name
 }
 
 function createSeen(ttlMs = DEDUPE_TTL_MS): Seen {

@@ -1,5 +1,3 @@
-import type { Mention } from "./parse-message.js"
-
 export type TextLinkEntity = {
   type: "text_link"
   offset: number
@@ -18,10 +16,6 @@ export function buildDescription(input: {
   body: string
   replyText?: string
   titleSource: "message" | "reply" | null
-  author: string
-  chatTitle: string
-  messageLink: string
-  extraMentions: Mention[]
 }): string {
   const parts: string[] = []
   const body = input.body.trim()
@@ -31,17 +25,20 @@ export function buildDescription(input: {
   if (reply && (input.titleSource === "message" || body)) parts.push(quote(reply))
   if (reply && input.titleSource === "reply" && !body) parts.push(reply)
 
-  const footer = [
-    "---",
-    `Источник: [сообщение](${input.messageLink})`,
-    `Автор: ${input.author}`,
-    `Чат: ${input.chatTitle.replace(/\s+/g, " ").trim() || "чат"}`,
-  ]
-  if (input.extraMentions.length > 0) {
-    footer.push(`Также отмечены: ${input.extraMentions.map((mention) => mention.label).join(", ")}`)
-  }
-  parts.push(footer.join("\n"))
   return parts.join("\n\n")
+}
+
+export function messageLinkTitle(
+  from: { first_name?: string; last_name?: string; username?: string } | undefined,
+): string {
+  const name = [from?.first_name, from?.last_name]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join(" ")
+  if (name) return `${name} – сообщение`
+  const username = from?.username?.replace(/^@/, "").trim()
+  if (username) return `@${username} – сообщение`
+  return "сообщение"
 }
 
 export function formatSuccessReply(identifier: string, url: string): { text: string; entities: TextLinkEntity[] } {

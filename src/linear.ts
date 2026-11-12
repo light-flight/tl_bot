@@ -57,7 +57,13 @@ export class LinearGateway {
     return resolution
   }
 
-  async createIssue(input: { title: string; description: string; assigneeId?: string }): Promise<CreatedIssue> {
+  async createIssue(input: {
+    title: string
+    description: string
+    messageLink: string
+    linkTitle: string
+    assigneeId?: string
+  }): Promise<CreatedIssue> {
     const payload = await this.client.createIssue({
       teamId: this.teamId,
       title: input.title.slice(0, TITLE_LIMIT),
@@ -67,6 +73,10 @@ export class LinearGateway {
     })
     const issue = await payload.issue
     if (!payload.success || !issue) throw new Error("Linear did not return an issue")
+
+    const linked = await this.client.attachmentLinkURL(issue.id, input.messageLink, { title: input.linkTitle })
+    if (!linked.success) throw new Error("Linear did not link the message")
+
     return { identifier: issue.identifier, url: issue.url, title: issue.title }
   }
 

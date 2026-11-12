@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildDescription, formatSuccessReply, telegramMessageLink } from "./description.js"
+import { buildDescription, formatSuccessReply, messageLinkTitle, telegramMessageLink } from "./description.js"
 
 describe("telegramMessageLink", () => {
   it("links a public chat by username", () => {
@@ -12,31 +12,14 @@ describe("telegramMessageLink", () => {
 })
 
 describe("buildDescription", () => {
-  it("quotes the replied message and lists other mentions", () => {
+  it("quotes the replied message and leaves out the footer", () => {
     const description = buildDescription({
       body: "Падает после редиректа",
       replyText: "Исходный баг\nещё строка",
       titleSource: "message",
-      author: "@georgy",
-      chatTitle: "Design",
-      messageLink: "https://t.me/c/1/2",
-      extraMentions: [{ username: "ivan", label: "@ivan" }],
     })
 
-    expect(description).toBe(
-      [
-        "Падает после редиректа",
-        "",
-        "> Исходный баг",
-        "> ещё строка",
-        "",
-        "---",
-        "Источник: [сообщение](https://t.me/c/1/2)",
-        "Автор: @georgy",
-        "Чат: Design",
-        "Также отмечены: @ivan",
-      ].join("\n"),
-    )
+    expect(description).toBe(["Падает после редиректа", "", "> Исходный баг", "> ещё строка"].join("\n"))
   })
 
   it("uses the replied message once when the title came from it", () => {
@@ -44,14 +27,31 @@ describe("buildDescription", () => {
       body: "",
       replyText: "Починить логин\nдетали",
       titleSource: "reply",
-      author: "@georgy",
-      chatTitle: "Design",
-      messageLink: "https://t.me/c/1/2",
-      extraMentions: [],
     })
 
-    expect(description.startsWith("Починить логин\nдетали\n\n---")).toBe(true)
+    expect(description).toBe("Починить логин\nдетали")
     expect(description).not.toContain("> Починить")
+  })
+
+  it("is empty when the message has no body", () => {
+    expect(buildDescription({ body: "  ", titleSource: null })).toBe("")
+  })
+})
+
+describe("messageLinkTitle", () => {
+  it("uses the first and last name", () => {
+    expect(messageLinkTitle({ first_name: "Georgy", last_name: "Yuriev", username: "georgy" })).toBe(
+      "Georgy Yuriev – сообщение",
+    )
+  })
+
+  it("uses a single name", () => {
+    expect(messageLinkTitle({ first_name: "Georgy" })).toBe("Georgy – сообщение")
+  })
+
+  it("falls back to the username when there is no name", () => {
+    expect(messageLinkTitle({ username: "georgy" })).toBe("@georgy – сообщение")
+    expect(messageLinkTitle(undefined)).toBe("сообщение")
   })
 })
 
