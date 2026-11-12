@@ -91,20 +91,8 @@ async function handleMention(ctx: Context, linear: LinearGateway, seen: Seen): P
       ...(resolution.assignee ? { assigneeId: resolution.assignee.id } : {}),
     })
     created = true
-    await ctx.reply(
-      formatSuccessReply({
-        identifier: issue.identifier,
-        title: issue.title,
-        url: issue.url,
-        ...(resolution.assignee
-          ? { assigneeName: resolution.assignee.displayName || resolution.assignee.name }
-          : {}),
-        unresolved: resolution.unresolved.map((item) => ({
-          label: item.mention.label,
-          reason: item.reason,
-        })),
-      }),
-    )
+    const reply = formatSuccessReply(issue.identifier, issue.url)
+    await ctx.reply(reply.text, { entities: reply.entities })
   } catch (error) {
     console.error(created ? "Created the Linear issue but failed to reply" : "Failed to create Linear issue", error)
     if (!created) {

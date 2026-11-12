@@ -1,5 +1,11 @@
 import type { Mention } from "./parse-message.js"
-import type { UnresolvedReason } from "./assignees.js"
+
+export type TextLinkEntity = {
+  type: "text_link"
+  offset: number
+  length: number
+  url: string
+}
 
 export function telegramMessageLink(chatId: number, username: string | undefined, messageId: number): string {
   if (username) return `https://t.me/${username}/${messageId}`
@@ -38,17 +44,11 @@ export function buildDescription(input: {
   return parts.join("\n\n")
 }
 
-export function formatSuccessReply(input: {
-  identifier: string
-  title: string
-  url: string
-  assigneeName?: string
-  unresolved: { label: string; reason: UnresolvedReason }[]
-}): string {
-  const lines = [`${input.identifier} — ${input.title}`, input.url]
-  if (input.assigneeName) lines.push(`Исполнитель: ${input.assigneeName}`)
-  for (const item of input.unresolved) lines.push(`Не назначил: ${item.label}${reasonSuffix(item.reason)}`)
-  return lines.join("\n")
+export function formatSuccessReply(identifier: string, url: string): { text: string; entities: TextLinkEntity[] } {
+  return {
+    text: identifier,
+    entities: [{ type: "text_link", offset: 0, length: identifier.length, url }],
+  }
 }
 
 function quote(text: string): string {
@@ -58,8 +58,3 @@ function quote(text: string): string {
     .join("\n")
 }
 
-function reasonSuffix(reason: UnresolvedReason): string {
-  if (reason === "map_missing") return " — нет такого пользователя в Linear по ASSIGNEE_MAP"
-  if (reason === "ambiguous") return " — несколько совпадений в Linear"
-  return ""
-}

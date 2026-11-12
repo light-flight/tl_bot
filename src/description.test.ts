@@ -56,22 +56,11 @@ describe("buildDescription", () => {
 })
 
 describe("formatSuccessReply", () => {
-  it("includes the assignee and why someone else was skipped", () => {
-    const reply = formatSuccessReply({
-      identifier: "TL-12",
-      title: "Починить логин",
-      url: "https://linear.app/acme/issue/TL-12",
-      assigneeName: "Ivan",
-      unresolved: [{ label: "@ghost", reason: "map_missing" }],
-    })
+  it("replies with the identifier as a link and nothing else", () => {
+    const url = "https://linear.app/acme/issue/TL-12"
+    const reply = formatSuccessReply("TL-12", url)
 
-    expect(reply).toBe(
-      [
-        "TL-12 — Починить логин",
-        "https://linear.app/acme/issue/TL-12",
-        "Исполнитель: Ivan",
-        "Не назначил: @ghost — нет такого пользователя в Linear по ASSIGNEE_MAP",
-      ].join("\n"),
-    )
+    expect(reply.text).toBe("TL-12")
+    expect(reply.entities).toEqual([{ type: "text_link", offset: 0, length: "TL-12".length, url }])
   })
 })
