@@ -1,7 +1,7 @@
 node_modules/
 dist/
 .env
-.kamal/secrets
+.kamal/secrets*
 config/deploy.production.yml
 *.log
 .DS_Store
