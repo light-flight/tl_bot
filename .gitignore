@@ -3,5 +3,6 @@ dist/
 .env
 .kamal/secrets*
 config/deploy.production.yml
+data/
 *.log
 .DS_Store

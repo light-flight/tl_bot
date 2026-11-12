@@ -18,13 +18,14 @@ registry:
 env:
   secret:
     - TELEGRAM_BOT_TOKEN
-    - LINEAR_API_KEY
-    - LINEAR_TEAM
-    - LINEAR_PROJECT
-    - ASSIGNEE_MAP
     - TELEGRAM_WEBHOOK_SECRET
+    - SETTINGS_KEY
   clear:
     PORT: "3000"
+    DATABASE_PATH: /data/settings.sqlite
+
+volumes:
+  - "tl_bot_data:/data"
 
 builder:
   arch: amd64

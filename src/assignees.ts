@@ -81,7 +81,7 @@ function lookupMap(mention: Mention, assigneeMap: ReadonlyMap<string, string>): 
   return null
 }
 
-function findMappedUser(users: LinearUser[], value: string): LinearUser | undefined {
+export function findMappedUser(users: LinearUser[], value: string): LinearUser | undefined {
   const needle = value.toLowerCase()
   if (value.includes("@")) return users.find((user) => user.email.toLowerCase() === needle)
   return users.find((user) => user.id === value)

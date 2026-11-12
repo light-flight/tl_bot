@@ -1,10 +1,12 @@
+import { randomBytes } from "node:crypto"
 import { describe, expect, it } from "vitest"
 import { loadConfig, parseAssigneeMap } from "./config.js"
 
+const settingsKey = randomBytes(32).toString("base64")
+
 const baseEnv = {
   TELEGRAM_BOT_TOKEN: "telegram-token",
-  LINEAR_API_KEY: "lin_api",
-  LINEAR_TEAM: "TL",
+  SETTINGS_KEY: settingsKey,
   TELEGRAM_WEBHOOK_SECRET: "secret",
   WEBHOOK_URL: "https://bot.example.com/telegram/webhook",
 }
@@ -25,10 +27,11 @@ describe("parseAssigneeMap", () => {
 })
 
 describe("loadConfig", () => {
-  it("reads an empty project as unset", () => {
-    const config = loadConfig({ ...baseEnv, LINEAR_PROJECT: "  ", PORT: "3000" })
+  it("reads the settings key and the default database path", () => {
+    const config = loadConfig({ ...baseEnv, PORT: "3000" })
 
-    expect(config.linearProject).toBeNull()
+    expect(config.settingsKey).toEqual(Buffer.from(settingsKey, "base64"))
+    expect(config.databasePath).toBe("data/settings.sqlite")
     expect(config.webhookUrl).toBe("https://bot.example.com/telegram/webhook")
     expect(config.port).toBe(3000)
   })
@@ -45,5 +48,9 @@ describe("loadConfig", () => {
         TELEGRAM_WEBHOOK_SECRET: "secret",
       }),
     ).toThrow(/https/)
+  })
+
+  it("rejects a settings key of the wrong length", () => {
+    expect(() => loadConfig({ ...baseEnv, SETTINGS_KEY: "short" })).toThrow(/SETTINGS_KEY/)
   })
 })

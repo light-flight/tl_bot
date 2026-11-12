@@ -1,12 +1,11 @@
 import { z } from "zod"
+import { decodeSettingsKey } from "./secrets.js"
 
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1),
-  LINEAR_API_KEY: z.string().min(1),
-  LINEAR_TEAM: z.string().min(1),
-  LINEAR_PROJECT: z.string().optional().default(""),
-  ASSIGNEE_MAP: z.string().optional().default(""),
   TELEGRAM_WEBHOOK_SECRET: z.string().min(1),
+  SETTINGS_KEY: z.string().min(1),
+  DATABASE_PATH: z.string().min(1).default("data/settings.sqlite"),
   WEBHOOK_URL: z
     .string()
     .url()
@@ -18,10 +17,8 @@ export type AssigneeMap = Map<string, string>
 
 export type AppConfig = {
   telegramBotToken: string
-  linearApiKey: string
-  linearTeam: string
-  linearProject: string | null
-  assigneeMap: AssigneeMap
+  settingsKey: Buffer
+  databasePath: string
   webhookSecret: string
   webhookUrl: string
   port: number
@@ -59,10 +56,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   const value = parsed.data
   return {
     telegramBotToken: value.TELEGRAM_BOT_TOKEN,
-    linearApiKey: value.LINEAR_API_KEY,
-    linearTeam: value.LINEAR_TEAM,
-    linearProject: value.LINEAR_PROJECT.trim() || null,
-    assigneeMap: parseAssigneeMap(value.ASSIGNEE_MAP),
+    settingsKey: decodeSettingsKey(value.SETTINGS_KEY),
+    databasePath: value.DATABASE_PATH,
     webhookSecret: value.TELEGRAM_WEBHOOK_SECRET,
     webhookUrl: value.WEBHOOK_URL,
     port: value.PORT,
