@@ -1,5 +1,9 @@
+export type LinearCredential =
+  | { type: "personal"; apiKey: string }
+  | { type: "app"; clientId: string; clientSecret: string }
+
 export type ChatSettings = {
-  linearApiKey: string
+  credential: LinearCredential
   teamId: string
   teamKey: string
   projectId: string | null
@@ -17,7 +21,7 @@ export type SetupDraft = {
   step: DraftStep
   intent: DraftIntent
   ephemeralMessageId?: number
-  apiKey?: string
+  credential?: LinearCredential
   teamId?: string
   teamKey?: string
   projectId?: string | null

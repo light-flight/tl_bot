@@ -5,6 +5,7 @@ import {
   connectedCard,
   createDraft,
   keyDecision,
+  keyStepText,
   onboardingCard,
   parseWizardData,
   projectButtons,
@@ -25,7 +26,7 @@ const georgy: LinearUser = {
 
 function saved(): ChatSettings {
   return {
-    linearApiKey: "lin_api_SUPERSECRET",
+    credential: { type: "personal", apiKey: "lin_api_SUPERSECRET" },
     teamId: "team-1",
     teamKey: "TL",
     projectId: null,
@@ -44,7 +45,10 @@ describe("onboarding card", () => {
 
     expect(connectedCard(settings, false).text).not.toContain("lin_api_SUPERSECRET")
     expect(settingsText(settings)).not.toContain("lin_api_SUPERSECRET")
-    expect(settingsText(settings)).toContain("Ключ сохранён")
+    expect(settingsText(settings)).toContain("Персональный ключ")
+    expect(settingsText({ ...settings, credential: { type: "app", clientId: "client-id", clientSecret: "secretvalue" } })).toContain(
+      "Ключ приложения",
+    )
   })
 })
 
@@ -83,12 +87,33 @@ describe("wizard callbacks", () => {
 describe("keyDecision", () => {
   it("refuses a key that arrived as a public message", () => {
     expect(keyDecision({ ephemeral: false, argument: "lin_api_SUPERSECRET" })).toEqual({ type: "not-hidden" })
+    expect(keyDecision({ ephemeral: false, argument: "client-id secretvalue" })).toEqual({ type: "not-hidden" })
   })
 
-  it("accepts a hidden linear key and rejects a malformed one", () => {
-    expect(keyDecision({ ephemeral: true, argument: " lin_api_abc " })).toEqual({ type: "ready", key: "lin_api_abc" })
+  it("accepts a hidden personal key and an application client pair", () => {
+    expect(keyDecision({ ephemeral: true, argument: " lin_api_abc " })).toEqual({
+      type: "ready",
+      credential: { type: "personal", apiKey: "lin_api_abc" },
+    })
+    expect(keyDecision({ ephemeral: true, argument: "client-id secretvalue" })).toEqual({
+      type: "ready",
+      credential: { type: "app", clientId: "client-id", clientSecret: "secretvalue" },
+    })
+  })
+
+  it("rejects a single value that is not a personal key", () => {
     expect(keyDecision({ ephemeral: true, argument: "secret" })).toEqual({ type: "bad-format" })
     expect(keyDecision({ ephemeral: true, argument: "" })).toEqual({ type: "empty" })
+    expect(keyDecision({ ephemeral: true, argument: "lin_api_abc secretvalue" })).toEqual({ type: "bad-format" })
+  })
+
+  it("tells the admin how to create an application key", () => {
+    const text = keyStepText()
+
+    expect(text).toContain("OAuth applications")
+    expect(text).toContain("Client credentials")
+    expect(text).toContain("/key id secret")
+    expect(text).toContain("/key lin_api_")
   })
 })
 

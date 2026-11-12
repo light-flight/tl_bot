@@ -510,12 +510,12 @@ export function createBot(deps: { token: string; store: SettingsStore; pool: Gat
 
   async function applyAction(chatId: number, userId: number, draft: SetupDraft, action: WizardAction) {
     if (action.type === "teams" || action.type === "team" || action.type === "edit-team") {
-      if (!draft.apiKey) {
+      if (!draft.credential) {
         const next = await present(chatId, userId, draft, keyStepText(), [])
         remember(String(chatId), userId, next)
         return
       }
-      const teams = await fetchTeams(draft.apiKey)
+      const teams = await fetchTeams(draft.credential)
       if (action.type === "edit-team") {
         const next = touch({ ...draft, intent: "retarget", step: "team" }, clock())
         await showTeams(chatId, userId, next, teams)
@@ -533,18 +533,18 @@ export function createBot(deps: { token: string; store: SettingsStore; pool: Gat
         return
       }
       const chosen = withTeam(draft, team, clock())
-      const projects = await fetchProjects(draft.apiKey, team.id)
+      const projects = await fetchProjects(draft.credential, team.id)
       await showProjects(chatId, userId, chosen, projects)
       return
     }
 
     if (action.type === "projects" || action.type === "project" || action.type === "no-project" || action.type === "edit-project") {
-      if (!draft.apiKey || !draft.teamId) {
+      if (!draft.credential || !draft.teamId) {
         const next = await present(chatId, userId, draft, "Сначала выберите команду.", [])
         remember(String(chatId), userId, next)
         return
       }
-      const projects = await fetchProjects(draft.apiKey, draft.teamId)
+      const projects = await fetchProjects(draft.credential, draft.teamId)
       if (action.type === "edit-project") {
         const next = touch({ ...draft, intent: "reproject", step: "project" }, clock())
         await showProjects(chatId, userId, next, projects)
@@ -609,14 +609,15 @@ export function createBot(deps: { token: string; store: SettingsStore; pool: Gat
   async function onKey(ctx: Context) {
     if (!ctx.chat || !ctx.from) return
     const text = ctx.msg?.text ?? ""
+    const argument = String(ctx.match ?? "").trim()
     if (!isGroup(ctx.chat)) {
-      if (containsLinearKey(text)) await deletePlain(asRaw(ctx.api), ctx.chat.id, ctx.msg?.message_id ?? 0)
+      if (containsLinearKey(text) || argument) await deletePlain(asRaw(ctx.api), ctx.chat.id, ctx.msg?.message_id ?? 0)
       await ctx.reply(PRIVATE_HINT)
       return
     }
     const decision = keyDecision({ ephemeral: ephemeralId(ctx.msg) !== undefined, argument: String(ctx.match ?? "") })
     if (decision.type === "not-hidden") {
-      if (containsLinearKey(text)) await deletePlain(asRaw(ctx.api), ctx.chat.id, ctx.msg?.message_id ?? 0)
+      if (argument) await deletePlain(asRaw(ctx.api), ctx.chat.id, ctx.msg?.message_id ?? 0)
       await ctx.reply(NOT_HIDDEN)
       return
     }
@@ -653,7 +654,7 @@ export function createBot(deps: { token: string; store: SettingsStore; pool: Gat
       }
 
       await show(CHECKING_KEY)
-      const probe = await probeKey(decision.key)
+      const probe = await probeKey(decision.credential)
       if (!probe.ok) {
         await show(probe.unauthorized ? KEY_REJECTED : KEY_UNREACHABLE)
         return
@@ -662,16 +663,19 @@ export function createBot(deps: { token: string; store: SettingsStore; pool: Gat
       const settings = deps.store.get(String(chatId))
       const team = settings ? probe.teams.find((item) => item.id === settings.teamId) : undefined
       if (settings && team) {
-        commit(String(chatId), { ...settings, linearApiKey: decision.key })
+        commit(String(chatId), { ...settings, credential: decision.credential })
         if (existing) {
-          draft = touch({ ...existing, apiKey: decision.key, ephemeralMessageId: draft.ephemeralMessageId }, clock())
+          draft = touch(
+            { ...existing, credential: decision.credential, ephemeralMessageId: draft.ephemeralMessageId },
+            clock(),
+          )
           persisted = true
         }
         await show(`Ключ обновлён. Команда ${team.key} на месте.`)
         return
       }
 
-      draft = withKey(draft, decision.key, clock())
+      draft = withKey(draft, decision.credential, clock())
       await showTeams(chatId, userId, draft, probe.teams, delivery)
     } finally {
       if (incoming !== undefined && incoming !== draft.ephemeralMessageId) {
@@ -708,14 +712,14 @@ export function createBot(deps: { token: string; store: SettingsStore; pool: Gat
         return
       }
 
-      const apiKey = draft?.apiKey ?? settings?.linearApiKey
-      if (!apiKey) {
+      const credential = draft?.credential ?? settings?.credential
+      if (!credential) {
         await replyHidden(ctx, keyStepText())
         return
       }
       let users
       try {
-        users = await fetchUsers(apiKey)
+        users = await fetchUsers(credential)
       } catch (error) {
         console.error("Failed to load Linear users", cleanError(error))
         await replyHidden(ctx, LOAD_FAILED)
@@ -737,7 +741,7 @@ export function createBot(deps: { token: string; store: SettingsStore; pool: Gat
         await showAssignees(
           chatId,
           userId,
-          withAssignees({ ...base, intent: "setup", apiKey }, check.map, clock()),
+          withAssignees({ ...base, intent: "setup", credential }, check.map, clock()),
           check.lines,
           delivery,
         )

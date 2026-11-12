@@ -7,6 +7,7 @@ import {
   entriesFromMap,
   type ChatSettings,
   type DraftIntent,
+  type LinearCredential,
   type SetupDraft,
 } from "./settings.js"
 
@@ -38,17 +39,19 @@ export type KeyDecision =
   | { type: "not-hidden" }
   | { type: "empty" }
   | { type: "bad-format" }
-  | { type: "ready"; key: string }
+  | { type: "ready"; credential: LinearCredential }
 
 const PAGE_SIZE = 8
 const BUTTON_TEXT = 40
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/
+const APP_PART = /^[A-Za-z0-9_+=./-]{8,200}$/
 
 export const ADMIN_ONLY = "Только администратор чата может настроить бота."
 export const CHECKING_KEY = "Проверяю ключ…"
 export const KEY_REJECTED = "Linear не принял ключ. Пришлите другой командой /key."
 export const KEY_UNREACHABLE = "Не получилось связаться с Linear. Пришлите /key ещё раз."
-export const KEY_FORMAT = "Ключ Linear начинается с lin_api_. Пришлите его командой /key."
+export const KEY_FORMAT =
+  "Пришлите Client ID и Client secret через пробел: /key id secret. Персональный ключ тоже подойдёт: /key lin_api_…"
 export const KEY_RATE_LIMIT = "Слишком много попыток. Подождите и пришлите /key ещё раз."
 export const NOT_HIDDEN =
   "Команда пришла как обычное сообщение, его видят все. Обновите Telegram и отправьте её снова. Ключ в общий чат не присылайте."
@@ -91,9 +94,14 @@ export function onboardingCard(settings: ChatSettings | null): Card {
 export function keyStepText(): string {
   return [
     "Шаг 1 из 4. Ключ Linear.",
-    "Linear → Settings → Security & access → API → Personal API keys.",
-    "Пришлите ключ командой /key lin_api_…",
+    "Лучше ключ приложения: задачи будут от его имени.",
+    "1. Settings → API → OAuth applications → New OAuth application.",
+    "2. Имя — так бот будет подписан под задачами. Developer name — любое. Developer URL и Callback URL — https://localhost.",
+    "3. Включите Client credentials. Public и Webhooks не включайте.",
+    "4. Если команда приватная, на странице приложения дайте ему доступ к ней. Иначе видны только публичные команды.",
+    "Пришлите Client ID и Client secret командой /key id secret.",
     "Её видите только вы.",
+    "Персональный ключ из Security & access тоже подойдёт: /key lin_api_…",
   ].join("\n")
 }
 
@@ -119,7 +127,7 @@ export function settingsText(settings: ChatSettings): string {
     `Команда ${settings.teamKey}`,
     `Проект ${project}`,
     `Исполнителей: ${settings.assigneeMap.size}`,
-    "Ключ сохранён.",
+    settings.credential.type === "app" ? "Ключ приложения." : "Персональный ключ.",
     "Сменить ключ: /key",
     "Сменить соответствия: /assignees",
   ].join("\n")
@@ -188,7 +196,7 @@ export function createDraft(now: number, intent: DraftIntent, step: SetupDraft["
 export function draftFromSettings(settings: ChatSettings, now: number, intent: DraftIntent, step: SetupDraft["step"]): SetupDraft {
   return {
     ...createDraft(now, intent, step),
-    apiKey: settings.linearApiKey,
+    credential: settings.credential,
     teamId: settings.teamId,
     teamKey: settings.teamKey,
     projectId: settings.projectId,
@@ -201,8 +209,8 @@ export function touch(draft: SetupDraft, now: number): SetupDraft {
   return { ...draft, expiresAt: now + DRAFT_TTL_MS }
 }
 
-export function withKey(draft: SetupDraft, apiKey: string, now: number): SetupDraft {
-  return touch({ ...draft, apiKey, step: "team" }, now)
+export function withKey(draft: SetupDraft, credential: LinearCredential, now: number): SetupDraft {
+  return touch({ ...draft, credential, step: "team" }, now)
 }
 
 export function withTeam(draft: SetupDraft, team: { id: string; key: string }, now: number): SetupDraft {
@@ -240,9 +248,9 @@ export function withAssignees(draft: SetupDraft, map: AssigneeMap, now: number):
 }
 
 export function toSettings(draft: SetupDraft): ChatSettings | null {
-  if (!draft.apiKey || !draft.teamId || !draft.teamKey) return null
+  if (!draft.credential || !draft.teamId || !draft.teamKey) return null
   return {
-    linearApiKey: draft.apiKey,
+    credential: draft.credential,
     teamId: draft.teamId,
     teamKey: draft.teamKey,
     projectId: draft.projectId ?? null,
@@ -253,10 +261,25 @@ export function toSettings(draft: SetupDraft): ChatSettings | null {
 
 export function keyDecision(input: { ephemeral: boolean; argument: string }): KeyDecision {
   if (!input.ephemeral) return { type: "not-hidden" }
-  const key = input.argument.trim()
-  if (!key) return { type: "empty" }
-  if (!key.startsWith("lin_api_") || key.length > 200 || /\s/.test(key)) return { type: "bad-format" }
-  return { type: "ready", key }
+  const argument = input.argument.trim()
+  if (!argument) return { type: "empty" }
+  if (argument.startsWith("lin_api_") && argument.length <= 200 && !/\s/.test(argument)) {
+    return { type: "ready", credential: { type: "personal", apiKey: argument } }
+  }
+  const parts = argument.split(/\s+/)
+  const clientId = parts[0]
+  const clientSecret = parts[1]
+  if (
+    parts.length === 2 &&
+    clientId &&
+    clientSecret &&
+    !clientId.startsWith("lin_api_") &&
+    APP_PART.test(clientId) &&
+    APP_PART.test(clientSecret)
+  ) {
+    return { type: "ready", credential: { type: "app", clientId, clientSecret } }
+  }
+  return { type: "bad-format" }
 }
 
 export function hiddenCommand(ephemeral: boolean): boolean {

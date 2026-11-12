@@ -7,17 +7,30 @@ import { decrypt, DecryptError, encrypt } from "./secrets.js"
 import {
   mapFromEntries,
   type ChatSettings,
+  type LinearCredential,
   type SetupDraft,
 } from "./settings.js"
 
-const settingsSchema = z.object({
-  linearApiKey: z.string().min(1),
-  teamId: z.string().min(1),
-  teamKey: z.string().min(1),
-  projectId: z.string().nullable(),
-  projectName: z.string().nullable(),
-  assigneeMap: z.array(z.tuple([z.string(), z.string()])),
-})
+const credentialSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("personal"), apiKey: z.string().min(1) }),
+  z.object({ type: z.literal("app"), clientId: z.string().min(1), clientSecret: z.string().min(1) }),
+])
+
+const settingsSchema = z
+  .object({
+    credential: credentialSchema.optional(),
+    linearApiKey: z.string().min(1).optional(),
+    teamId: z.string().min(1),
+    teamKey: z.string().min(1),
+    projectId: z.string().nullable(),
+    projectName: z.string().nullable(),
+    assigneeMap: z.array(z.tuple([z.string(), z.string()])),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.credential && !value.linearApiKey) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "missing linear credential" })
+    }
+  })
 
 const draftSchema = z.object({
   nonce: z.string().regex(/^[0-9a-f]{8}$/),
@@ -25,6 +38,7 @@ const draftSchema = z.object({
   step: z.enum(["key", "team", "project", "assignees", "settings", "confirm-reset"]),
   intent: z.enum(["setup", "retarget", "reproject", "manage"]),
   ephemeralMessageId: z.number().optional(),
+  credential: credentialSchema.optional(),
   apiKey: z.string().optional(),
   teamId: z.string().optional(),
   teamKey: z.string().optional(),
@@ -117,7 +131,7 @@ export function openStore(path: string, key: Buffer, now = Date.now()): Settings
   function readSettings(chatId: string, payload: Uint8Array): ChatSettings {
     const parsed = settingsSchema.parse(JSON.parse(decrypt(key, settingsAad(chatId), Buffer.from(payload))))
     return {
-      linearApiKey: parsed.linearApiKey,
+      credential: credentialFrom(parsed),
       teamId: parsed.teamId,
       teamKey: parsed.teamKey,
       projectId: parsed.projectId,
@@ -128,7 +142,21 @@ export function openStore(path: string, key: Buffer, now = Date.now()): Settings
 
   function readDraft(chatId: string, userId: string, payload: Uint8Array): SetupDraft {
     const parsed = draftSchema.parse(JSON.parse(decrypt(key, draftAad(chatId, userId), Buffer.from(payload))))
-    return parsed
+    const credential =
+      parsed.credential ?? (parsed.apiKey ? { type: "personal" as const, apiKey: parsed.apiKey } : undefined)
+    return {
+      nonce: parsed.nonce,
+      expiresAt: parsed.expiresAt,
+      step: parsed.step,
+      intent: parsed.intent,
+      ...(parsed.ephemeralMessageId !== undefined ? { ephemeralMessageId: parsed.ephemeralMessageId } : {}),
+      ...(credential ? { credential } : {}),
+      ...(parsed.teamId !== undefined ? { teamId: parsed.teamId } : {}),
+      ...(parsed.teamKey !== undefined ? { teamKey: parsed.teamKey } : {}),
+      ...(parsed.projectId !== undefined ? { projectId: parsed.projectId } : {}),
+      ...(parsed.projectName !== undefined ? { projectName: parsed.projectName } : {}),
+      assigneeMap: parsed.assigneeMap,
+    }
   }
 
   function assertSettingsReadable(): void {
@@ -167,19 +195,7 @@ export function openStore(path: string, key: Buffer, now = Date.now()): Settings
       return readSettings(chatId, blob(row.ciphertext))
     },
     save(chatId, settings) {
-      const payload = encrypt(
-        key,
-        settingsAad(chatId),
-        JSON.stringify({
-          linearApiKey: settings.linearApiKey,
-          teamId: settings.teamId,
-          teamKey: settings.teamKey,
-          projectId: settings.projectId,
-          projectName: settings.projectName,
-          assigneeMap: [...settings.assigneeMap],
-        }),
-      )
-      statements.saveSettings.run(chatId, payload, Date.now())
+      statements.saveSettings.run(chatId, encrypt(key, settingsAad(chatId), settingsJson(settings)), Date.now())
     },
     forgetChat(chatId) {
       statements.deleteSettings.run(chatId)
@@ -195,18 +211,7 @@ export function openStore(path: string, key: Buffer, now = Date.now()): Settings
         if (settingsRow) {
           const settings = readSettings(fromChatId, blob(settingsRow.ciphertext))
           statements.deleteSettings.run(fromChatId)
-          const payload = encrypt(
-            key,
-            settingsAad(toChatId),
-            JSON.stringify({
-              linearApiKey: settings.linearApiKey,
-              teamId: settings.teamId,
-              teamKey: settings.teamKey,
-              projectId: settings.projectId,
-              projectName: settings.projectName,
-              assigneeMap: [...settings.assigneeMap],
-            }),
-          )
+          const payload = encrypt(key, settingsAad(toChatId), settingsJson(settings))
           statements.saveSettings.run(toChatId, payload, Date.now())
         }
         for (const row of drafts) {
@@ -251,6 +256,23 @@ export function openStore(path: string, key: Buffer, now = Date.now()): Settings
       statements.saveCard.run(chatId, messageId)
     },
   }
+}
+
+function credentialFrom(parsed: { credential?: LinearCredential; linearApiKey?: string }): LinearCredential {
+  if (parsed.credential) return parsed.credential
+  if (parsed.linearApiKey) return { type: "personal", apiKey: parsed.linearApiKey }
+  throw new Error("missing linear credential")
+}
+
+function settingsJson(settings: ChatSettings): string {
+  return JSON.stringify({
+    credential: settings.credential,
+    teamId: settings.teamId,
+    teamKey: settings.teamKey,
+    projectId: settings.projectId,
+    projectName: settings.projectName,
+    assigneeMap: [...settings.assigneeMap],
+  })
 }
 
 function blob(value: unknown): Uint8Array {

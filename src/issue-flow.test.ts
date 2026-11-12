@@ -3,7 +3,7 @@ import { runMention } from "./issue-flow.js"
 import type { ChatSettings } from "./settings.js"
 
 const settings: ChatSettings = {
-  linearApiKey: "lin_api_SUPERSECRET",
+  credential: { type: "personal", apiKey: "lin_api_SUPERSECRET" },
   teamId: "team-1",
   teamKey: "TL",
   projectId: null,

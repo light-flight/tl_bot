@@ -13,7 +13,7 @@ const directories: string[] = []
 
 function settings(apiKey = "lin_api_SUPERSECRET"): ChatSettings {
   return {
-    linearApiKey: apiKey,
+    credential: { type: "personal", apiKey },
     teamId: "team-1",
     teamKey: "TL",
     projectId: "project-1",
@@ -28,7 +28,7 @@ function draft(nonce = "abcd1234"): SetupDraft {
     expiresAt: Date.now() + 60_000,
     step: "team",
     intent: "setup",
-    apiKey: "lin_api_SUPERSECRET",
+    credential: { type: "personal", apiKey: "lin_api_SUPERSECRET" },
     assigneeMap: [],
   }
 }
@@ -61,6 +61,63 @@ describe("openStore", () => {
     reopened.close()
   })
 
+  it("reads a personal key saved before application credentials", () => {
+    const path = databasePath()
+    const prepared = openStore(path, key)
+    prepared.close()
+
+    const db = new DatabaseSync(path)
+    db.prepare("INSERT INTO chat_settings (chat_id, ciphertext, updated_at) VALUES (?, ?, ?)").run(
+      "-100",
+      encrypt(key, "chat:-100", JSON.stringify({
+        linearApiKey: "lin_api_SUPERSECRET",
+        teamId: "team-1",
+        teamKey: "TL",
+        projectId: "project-1",
+        projectName: "Сайт",
+        assigneeMap: [["georgy", "georgy@example.com"]],
+      })),
+      Date.now(),
+    )
+    db.prepare("INSERT INTO setup_drafts (chat_id, user_id, ciphertext, expires_at) VALUES (?, ?, ?, ?)").run(
+      "-100",
+      "7",
+      encrypt(key, "draft:-100:7", JSON.stringify({
+        nonce: "abcd1234",
+        expiresAt: Date.now() + 60_000,
+        step: "team",
+        intent: "setup",
+        apiKey: "lin_api_SUPERSECRET",
+        assigneeMap: [],
+      })),
+      Date.now() + 60_000,
+    )
+    db.close()
+
+    const reopened = openStore(path, key)
+    expect(reopened.get("-100")).toEqual(settings())
+    expect(reopened.getDraft("-100", "7")?.credential).toEqual({ type: "personal", apiKey: "lin_api_SUPERSECRET" })
+    reopened.close()
+  })
+
+  it("roundtrips an application credential without writing the secret in plaintext", () => {
+    const path = databasePath()
+    const app = settings()
+    app.credential = { type: "app", clientId: "client-id", clientSecret: "secretvalue" }
+    const store = openStore(path, key)
+    store.save("-100", app)
+    store.close()
+
+    const db = new DatabaseSync(path)
+    const row = db.prepare("SELECT ciphertext FROM chat_settings").get() as { ciphertext: Uint8Array } | undefined
+    db.close()
+    expect(Buffer.from(row?.ciphertext ?? new Uint8Array()).includes(Buffer.from("secretvalue"))).toBe(false)
+
+    const reopened = openStore(path, key)
+    expect(reopened.get("-100")?.credential).toEqual(app.credential)
+    reopened.close()
+  })
+
   it("refuses to start when the encryption key does not match", () => {
     const path = databasePath()
     const store = openStore(path, key)
@@ -81,7 +138,7 @@ describe("openStore", () => {
     expect(store.get("-1")).toBeNull()
     expect(store.get("-100")).toEqual(settings())
     expect(store.getCard("-100")).toBe(42)
-    expect(store.getDraft("-100", "7")?.nonce).toBe("abcd1234")
+    expect(store.getDraft("-100", "7")?.credential).toEqual({ type: "personal", apiKey: "lin_api_SUPERSECRET" })
     expect(store.getDraft("-1", "7")).toBeNull()
     store.close()
   })
